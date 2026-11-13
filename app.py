@@ -65,17 +65,47 @@ def fetch_all(lat, lon, start, end):
     return out
 
 
-@st.cache_data(show_spinner=False, ttl=24 * 3600)
-def geocode(name):
-    """City name -> (lat, lon, display name) using OpenStreetMap Nominatim."""
+def _geocode_openmeteo(name):
+    r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
+                     params={"name": name, "count": 1, "language": "en", "format": "json"}, timeout=20)
+    r.raise_for_status()
+    res = r.json().get("results")
+    if not res:
+        return None
+    x = res[0]
+    return float(x["latitude"]), float(x["longitude"]), f'{x["name"]}, {x.get("country", "")}'
+
+
+def _geocode_nominatim(name):
     r = requests.get("https://nominatim.openstreetmap.org/search",
-                     params={"q": name, "format": "json", "limit": 1},
-                     headers={"User-Agent": "TrendDetective-SpaceApps2026"}, timeout=30)
+                     params={"q": name, "format": "json", "limit": 1, "accept-language": "en"},
+                     headers={"User-Agent": "TrendDetective-SpaceApps2026"}, timeout=20)
     r.raise_for_status()
     j = r.json()
     if not j:
         return None
     return float(j[0]["lat"]), float(j[0]["lon"]), j[0]["display_name"]
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 3600)
+def _geocode_cached(name):
+    """Only successful answers are cached (a failure raises, so it is not stored)."""
+    for fn in (_geocode_openmeteo, _geocode_nominatim):
+        try:
+            g = fn(name)
+        except Exception:
+            continue
+        if g:
+            return g
+    raise LookupError(name)
+
+
+def geocode(name):
+    """City name -> (lat, lon, display name), or None. Never crashes the app."""
+    try:
+        return _geocode_cached(name)
+    except Exception:
+        return None
 
 
 # ====================================================================== maths
@@ -222,7 +252,7 @@ if city:
         st.session_state["lat"], st.session_state["lon"] = round(g[0], 2), round(g[1], 2)
         st.session_state["name"] = g[2].split(",")[0]
     else:
-        st.warning("Place not found, try another spelling.")
+        st.warning("Place not found right now. Check the spelling, or click the map instead.")
 
 lat, lon, name = st.session_state["lat"], st.session_state["lon"], st.session_state["name"]
 
@@ -262,6 +292,10 @@ if a is None:
 direction, level, icon, why = verdict(a)
 total = a["slope"] * (years[-1] - years[0])
 future = a["intercept"] + a["slope"] * project_to
+if mode != "Yearly averages":
+    future_txt = f"{future:+.2f} {unit} above the normal for that month"
+else:
+    future_txt = f"{future:.2f} {unit}"
 hottest = max(zip(ym, years)); coldest = min(zip(ym, years))
 
 with col_res:
@@ -271,7 +305,7 @@ with col_res:
     c2.metric(f"Change {years[0]}→{years[-1]}", f"{total:+.2f} {unit}")
     c3.markdown(f"<div style='font-size:0.85rem;opacity:0.7'>Verdict</div><div class='big'>{icon} {level.title()}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='card'>{why}</div>", unsafe_allow_html=True)
-    st.write(f"If this trend continues, {name} would reach **{future:.2f} {unit}** in **{project_to}** "
+    st.write(f"If this trend continues, {name} would reach **{future_txt}** in **{project_to}** "
              f"(average now {sum(ym)/len(ym):.2f} {unit}). Highest year: **{hottest[1]}** ({hottest[0]:.2f}), "
              f"lowest year: **{coldest[1]}** ({coldest[0]:.2f}).")
 
@@ -369,7 +403,7 @@ with t5:
     report.write(f"Theil-Sen robust slope: {a['sen_decade']:+.4f} {unit} per decade\n")
     report.write(f"Total change {years[0]}-{years[-1]}: {total:+.3f} {unit}\n")
     report.write(f"t-test p = {a['p_t']:.4f}, R2 = {a['r2']:.3f}\nMann-Kendall S = {a['mk_s']}, Z = {a['mk_z']:.2f}, p = {a['p_mk']:.4f}\n")
-    report.write(f"Verdict: {level}. {why}\nProjection: {future:.2f} {unit} in {project_to} if the trend continues.\n")
+    report.write(f"Verdict: {level}. {why}\nProjection: {future_txt} in {project_to} if the trend continues.\n")
     st.code(report.getvalue())
     st.download_button("Download report (.txt)", report.getvalue(), file_name=f"trend_report_{var}_{lat}_{lon}.txt")
     csvbuf = io.StringIO(); w = csv.writer(csvbuf)
