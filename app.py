@@ -39,6 +39,7 @@ DEMOS = {
     "Amazon rain forest": (-3.0, -60.0),
     "Chennai, India": (13.08, 80.27),
     "Antarctica (coast)": (-70.0, 10.0),
+    "My school, Hosur": (12.75, 77.81),
 }
 SEASONS = {"Winter (Dec-Feb)": (12, 1, 2), "Summer (Mar-May)": (3, 4, 5),
            "Monsoon (Jun-Sep)": (6, 7, 8, 9), "Post-monsoon (Oct-Nov)": (10, 11)}
