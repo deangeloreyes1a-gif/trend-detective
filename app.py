@@ -420,5 +420,5 @@ with t5:
         """)
 
 st.markdown("---")
-st.caption("Built by Deangelo Reyes (12), team Water Detectives, Hosur, India, for NASA Space Apps 2026. "
-           "Data: NASA POWER / MERRA-2 / GPM. Map: OpenStreetMap.")
+st.caption("Built by team Water Detectives, Hosur, India, for NASA Space Apps 2026. "
+           "Data: NASA POWER (MERRA-2 + satellites). Map: OpenStreetMap.")
